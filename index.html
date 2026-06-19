@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>孤独的公路 - 3D场景</title>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: 'Microsoft YaHei', sans-serif; }
+        #info {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: white;
+            background: rgba(0,0,0,0.6);
+            padding: 8px 15px;
+            border-radius: 8px;
+            pointer-events: none;
+            z-index: 10;
+            font-size: 14px;
+            backdrop-filter: blur(5px);
+        }
+        #controls-tip {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            color: rgba(255,255,255,0.5);
+            background: rgba(0,0,0,0.4);
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            pointer-events: none;
+            font-family: monospace;
+        }
+        @media (max-width: 600px) {
+            #info { font-size: 10px; }
+            #controls-tip { font-size: 8px; }
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        🛣️ 孤独的公路 | 无尽延伸 · 无人之境
+    </div>
+    <div id="controls-tip">
+        🖱️ 鼠标拖拽旋转视角 | 右键平移 | 滚动缩放
+    </div>
+
+    <!-- 引入 Three.js 核心库以及扩展库 -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.128.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.128.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+        // --- 初始化场景、相机、渲染器 ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x071a3b); // 深空蓝黑，孤独的黄昏/夜晚氛围
+        scene.fog = new THREE.FogExp2(0x071a3b, 0.003); // 雾效，增强无尽感和孤独感
+
+        // 透视相机 (视角, 宽高比, 近平面, 远平面)
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(8, 5, 12);
+        camera.lookAt(0, 0, 5);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true; // 开启阴影，增强真实感
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap; // 柔和阴影
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+
+        // CSS2渲染文字
+        const labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0px';
+        labelRenderer.domElement.style.left = '0px';
+        labelRenderer.domElement.style.pointerEvents = 'none';
+        document.body.appendChild(labelRenderer.domElement);
+
+        // --- 控制器，允许用户自由探索孤独感 ---
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;      // 惯性效果
+        controls.dampingFactor = 0.05;
+        controls.rotateSpeed = 1.0;
+        controls.zoomSpeed = 1.2;
+        controls.panSpeed = 0.8;
+        controls.enableZoom = true;
+        controls.enablePan = true;
+        controls.target.set(0, 0.5, 5);
+
+        // --- 灯光系统：营造孤寂但有点点黄昏光的氛围 ---
+        // 环境光
+        const ambientLight = new THREE.AmbientLight(0x404060);
+        scene.add(ambientLight);
+        
+        // 主光源方向光 (模拟夕阳或月光，偏冷)
+        const dirLight = new THREE.DirectionalLight(0xbfcfef, 1.2);
+        dirLight.position.set(5, 10, 3);
+        dirLight.castShadow = true;
+        dirLight.receiveShadow = true;
+        dirLight.shadow.mapSize.width = 1024;
+        dirLight.shadow.mapSize.height = 1024;
+        dirLight.shadow.camera.near = 0.5;
+        dirLight.shadow.camera.far = 30;
+        dirLight.shadow.camera.left = -10;
+        dirLight.shadow.camera.right = 10;
+        dirLight.shadow.camera.top = 10;
+        dirLight.shadow.camera.bottom = -10;
+        scene.add(dirLight);
+        
+        // 补光：背光暖色，模拟远处微弱晚霞
+        const backLight = new THREE.PointLight(0x886644, 0.5);
+        backLight.position.set(-2, 3, -5);
+        scene.add(backLight);
+        
+        // 冷色填充光，从地面反射
+        const fillLight = new THREE.PointLight(0x5577aa, 0.4);
+        fillLight.position.set(0, 1, 2);
+        scene.add(fillLight);
+        
+        // 一个小小的点光源跟随相机? 不必要，但添加一点路面光斑
+        const roadGlow = new THREE.PointLight(0x88aaff, 0.3);
+        roadGlow.position.set(0, 0.2, 0);
+        scene.add(roadGlow);
+        
+        // --- 地面：荒原/沙漠/枯草地，配合公路 ---
+        const groundMat = new THREE.MeshStandardMaterial({ color: 0x5d4a34, roughness: 0.85, metalness: 0.1 });
+        const groundPlane = new THREE.Mesh(new THREE.PlaneGeometry(40, 120), groundMat);
+        groundPlane.rotation.x = -Math.PI / 2;
+        groundPlane.position.y = -0.15;
+        groundPlane.receiveShadow = true;
+        scene.add(groundPlane);
+        
+        // 添加一些碎石和杂草的效果（用许多小立方体和小平面替代，为避免性能过载，使用实例化？简单场景直接循环）
+        const gravelMat = new THREE.MeshStandardMaterial({ color: 0x7a6852, roughness: 0.9 });
+        for (let i = 0; i < 600; i++) {
+            const gravel = new THREE.Mesh(new THREE.DodecahedronGeometry(0.03, 0), gravelMat);
+            const x = (Math.random() - 0.5) * 35;
+            const z = (Math.random() - 0.5) * 55 + 10; // 集中在相机前方较远范围
+            const y = -0.1 + Math.random() * 0.1;
+            gravel.position.set(x, y, z);
+            gravel.scale.setScalar(0.5 + Math.random() * 1.5);
+            gravel.castShadow = true;
+            gravel.receiveShadow = false;
+            scene.add(gravel);
+        }
+        
+        // --- 公路主体：一条略带弧线的沥青路，使用 ExtrudeGeometry 或者简单拉长的立方体组合 ---
+        // 为了表现“无尽”和“孤独”，公路稍微带点起伏但总体笔直向远方延伸
+        
+        // 公路基础平面 (长条)
+        const roadMat = new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.4, metalness: 0.7 });
+        const roadLength = 70;
+        const roadWidth = 1.8;
+        const roadMain = new THREE.Mesh(new THREE.BoxGeometry(roadWidth, 0.08, roadLength), roadMat);
+        roadMain.position.set(0, -0.08, roadLength/2 - 5);
+        roadMain.castShadow = true;
+        roadMain.receiveShadow = true;
+        scene.add(roadMain);
+        
+        // 公路中线 (黄色虚线)
+        const lineMat = new THREE.MeshStandardMaterial({ color: 0xebc334, emissive: 0x442200 });
+        const dashLength = 0.6;
+        const dashGap = 0.8;
+        const dashCount = 35;
+        for (let i = 0; i < dashCount; i++) {
+            const zPos = i * (dashLength + dashGap) + 1.5;
+            if (zPos > roadLength - 2) break;
+            const dash = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.05, dashLength), lineMat);
+            dash.position.set(0, 0.02, zPos - 3);
+            dash.castShadow = true;
+            scene.add(dash);
+        }
+        
+        // 公路两侧路肩/白色边线
+        const edgeMat = new THREE.MeshStandardMaterial({ color: 0xddddcc });
+        const edgeWidth = 0.12;
+        const edgeLen = roadLength;
+        const leftEdge = new THREE.Mesh(new THREE.BoxGeometry(edgeWidth, 0.05, edgeLen), edgeMat);
+        leftEdge.position.set(-roadWidth/2 - 0.05, -0.03, roadLength/2 - 5);
+        leftEdge.castShadow = true;
+        const rightEdge = new THREE.Mesh(new THREE.BoxGeometry(edgeWidth, 0.05, edgeLen), edgeMat);
+        rightEdge.position.set(roadWidth/2 + 0.05, -0.03, roadLength/2 - 5);
+        rightEdge.castShadow = true;
+        scene.add(leftEdge);
+        scene.add(rightEdge);
+        
+        // 沿路添加一些枯草或孤独的植物 (低多边形)
+        const bushMat = new THREE.MeshStandardMaterial({ color: 0x8b6b4d });
+        const deadBushMat = new THREE.MeshStandardMaterial({ color: 0xa57c5c });
+        for (let i = 0; i < 180; i++) {
+            let side = Math.random() > 0.5 ? 1 : -1;
+            let offset = 1.4 + Math.random() * 1.2;
+            let zPos = (Math.random() - 0.5) * (roadLength + 5) + 5;
+            // 避免直接长在路面上
+            if (Math.abs(zPos - (roadLength/2-5)) < roadLength/2 && Math.abs(offset) < roadWidth/2 + 0.3) continue;
+            let bush;
+            if (Math.random() > 0.6) {
+                bush = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.25, 3), deadBushMat);
+            } else {
+                bush = new THREE.Mesh(new THREE.SphereGeometry(0.09, 5), bushMat);
+            }
+            bush.position.set(side * offset, -0.1, zPos);
+            bush.castShadow = true;
+            bush.receiveShadow = false;
+            scene.add(bush);
+        }
+        
+        // 添加几颗孤独的枯树 (远处)
+        const trunkMat = new THREE.MeshStandardMaterial({ color: 0x6d4c3c });
+        const foliageMat = new THREE.MeshStandardMaterial({ color: 0x5e7a5e });
+        const treePositions = [
+            { x: -3.8, z: -2, scale: 0.8 }, { x: 4.2, z: 0, scale: 0.9 }, 
+            { x: -4.5, z: 8, scale: 1.1 }, { x: 5.0, z: 15, scale: 1.0 },
+            { x: -3.0, z: 22, scale: 0.7 }, { x: 4.5, z: 30, scale: 1.2 },
+            { x: -5.2, z: 40, scale: 0.9 }, { x: 5.5, z: 48, scale: 1.0 },
+            { x: -4.0, z: 55, scale: 0.6 }, { x: 4.0, z: 60, scale: 0.8 }
+        ];
+        treePositions.forEach(pos => {
+            const treeGroup = new THREE.Group();
+            const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.2 * pos.scale, 0.3 * pos.scale, 0.8 * pos.scale, 5), trunkMat);
+            trunk.position.y = 0.3 * pos.scale;
+            trunk.castShadow = true;
+            const foliage1 = new THREE.Mesh(new THREE.ConeGeometry(0.4 * pos.scale, 0.6 * pos.scale, 6), foliageMat);
+            foliage1.position.y = 0.7 * pos.scale;
+            foliage1.castShadow = true;
+            const foliage2 = new THREE.Mesh(new THREE.ConeGeometry(0.3 * pos.scale, 0.5 * pos.scale, 6), foliageMat);
+            foliage2.position.y = 1.0 * pos.scale;
+            foliage2.castShadow = true;
+            treeGroup.add(trunk, foliage1, foliage2);
+            treeGroup.position.set(pos.x, -0.15, pos.z);
+            scene.add(treeGroup);
+        });
+        
+        // --- 孤独的元素: 一个废弃的路牌 + 一辆破旧车的剪影? 加上CSS2D文字增强孤独氛围---
+        const signPostMat = new THREE.MeshStandardMaterial({ color: 0xaaaaaa, metalness: 0.5 });
+        const signBoardMat = new THREE.MeshStandardMaterial({ color: 0x886644 });
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.12, 1.2, 4), signPostMat);
+        post.position.set(2.2, 0.4, 12);
+        post.castShadow = true;
+        const board = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.6, 0.05), signBoardMat);
+        board.position.set(2.2, 1.0, 12);
+        board.castShadow = true;
+        scene.add(post, board);
+        
+        // 添加CSS2D文字: "NO WHERE" 和 "NOW HERE" 的哲学孤独感
+        function makeText(text, color, position, fontSize = '20px') {
+            const div = document.createElement('div');
+            div.textContent = text;
+            div.style.color = color;
+            div.style.fontSize = fontSize;
+            div.style.fontWeight = 'bold';
+            div.style.textShadow = '1px 1px 0px black';
+            div.style.background = 'rgba(0,0,0,0.5)';
+            div.style.padding = '4px 12px';
+            div.style.borderRadius = '30px';
+            div.style.borderLeft = `3px solid ${color}`;
+            div.style.fontFamily = 'monospace';
+            div.style.backdropFilter = 'blur(4px)';
+            const label = new CSS2DObject(div);
+            label.position.copy(position);
+            scene.add(label);
+        }
+        
+        makeText('⟵  NOWHERE  ⟶', '#ddaa66', new THREE.Vector3(0, 1.1, 20), '16px');
+        makeText('公路的尽头，是孤独的开始', '#bbaa99', new THREE.Vector3(0, 2.2, 35), '14px');
+        makeText('· 无人应答 ·', '#ccaa88', new THREE.Vector3(-2.5, 0.8, -3), '12px');
+        makeText('风与尘', '#9eb6d4', new THREE.Vector3(3, 0.3, 45), '13px');
+        
+        // 增加一个远处微弱车灯效果的粒子 (孤寂的幻想)
+        const particleCount = 300;
+        const particlesGeometry = new THREE.BufferGeometry();
+        const particlePositions = new Float32Array(particleCount * 3);
+        for (let i = 0; i < particleCount; i++) {
+            particlePositions[i*3] = (Math.random() - 0.5) * 50;
+            particlePositions[i*3+1] = Math.random() * 2.5 - 0.5;
+            particlePositions[i*3+2] = (Math.random() - 0.5) * 80 + 5;
+        }
+        particlesGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+        const particleMat = new THREE.PointsMaterial({ color: 0xaaccff, size: 0.05, transparent: true, opacity: 0.4 });
+        const particles = new THREE.Points(particlesGeometry, particleMat);
+        scene.add(particles);
+        
+        // 添加一些飘浮的尘埃粒子 (旋转动态)
+        const dustCount = 800;
+        const dustGeo = new THREE.BufferGeometry();
+        const dustPositions = new Float32Array(dustCount * 3);
+        for (let i = 0; i < dustCount; i++) {
+            dustPositions[i*3] = (Math.random() - 0.5) * 35;
+            dustPositions[i*3+1] = Math.random() * 1.2;
+            dustPositions[i*3+2] = (Math.random() - 0.5) * 85;
+        }
+        dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPositions, 3));
+        const dustMat = new THREE.PointsMaterial({ color: 0xbcae8a, size: 0.03, transparent: true, opacity: 0.3 });
+        const dustSystem = new THREE.Points(dustGeo, dustMat);
+        scene.add(dustSystem);
+        
+        // 简单云层或者远处山丘的轮廓: 利用半平面mesh加低多边形山
+        const hillMat = new THREE.MeshStandardMaterial({ color: 0x5c6e4a, roughness: 0.8, emissive: 0x1a2a1a });
+        const addHill = (x, z, scaleW, scaleH) => {
+            const hillGeo = new THREE.CylinderGeometry(scaleW * 1.2, scaleW * 1.8, scaleH, 8);
+            const hill = new THREE.Mesh(hillGeo, hillMat);
+            hill.position.set(x, -0.2, z);
+            hill.scale.set(1, scaleH/1.5, 1);
+            hill.castShadow = true;
+            hill.receiveShadow = false;
+            scene.add(hill);
+        };
+        addHill(-6, -8, 2.2, 0.9);
+        addHill(7, -5, 2.5, 1.0);
+        addHill(-7, 20, 2.8, 1.1);
+        addHill(8, 18, 2.3, 0.8);
+        addHill(-6.5, 45, 3.0, 1.2);
+        addHill(7.2, 42, 2.9, 1.0);
+        addHill(-5, 65, 2.5, 0.9);
+        
+        // 添加一个废旧的邮箱或者里程碑
+        const stoneMat = new THREE.MeshStandardMaterial({ color: 0x8f7a63 });
+        const milestone = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.6, 0.3), stoneMat);
+        milestone.position.set(1.2, -0.1, 28);
+        milestone.castShadow = true;
+        scene.add(milestone);
+        
+        // 在公路上方添加一个孤独的飞鸟? 简单的一个小三角组合
+        const birdGroup = new THREE.Group();
+        const birdMatBody = new THREE.MeshStandardMaterial({ color: 0x3a4e6b });
+        const bodyBird = new THREE.Mesh(new THREE.SphereGeometry(0.08, 6), birdMatBody);
+        const wingL = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.25, 3), birdMatBody);
+        wingL.rotation.z = 0.5;
+        wingL.position.x = -0.12;
+        const wingR = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.25, 3), birdMatBody);
+        wingR.rotation.z = -0.5;
+        wingR.position.x = 0.12;
+        birdGroup.add(bodyBird, wingL, wingR);
+        birdGroup.position.set(1.5, 1.8, -2);
+        scene.add(birdGroup);
+        
+        // --- 简单动画: 鸟缓慢盘旋，尘埃飘动，公路上的光点流动 (营造孤寂感)---
+        let time = 0;
+        
+        // 添加一个简单的无限延伸的视觉粒子流 (代表远处虚幻的光)
+        const streamCount = 200;
+        const streamGeo = new THREE.BufferGeometry();
+        const streamPos = [];
+        for (let i = 0; i < streamCount; i++) {
+            streamPos.push((Math.random() - 0.5) * 2.5, Math.random() * 0.3 + 0.1, Math.random() * 90);
+        }
+        streamGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(streamPos), 3));
+        const streamMat = new THREE.PointsMaterial({ color: 0xffcc88, size: 0.04, transparent: true, opacity: 0.5 });
+        const streamPoints = new THREE.Points(streamGeo, streamMat);
+        scene.add(streamPoints);
+        
+        // --- 动画循环，并让路面的光点移动---
+        function animate() {
+            requestAnimationFrame(animate);
+            time += 0.008;
+            
+            // 让尘埃缓缓飘移
+            dustSystem.rotation.y = Math.sin(time * 0.1) * 0.1;
+            particles.rotation.y = time * 0.02;
+            streamPoints.rotation.y = time * 0.05;
+            // 飞鸟缓慢飘移
+            birdGroup.position.x = 1.5 + Math.sin(time) * 0.5;
+            birdGroup.position.y = 1.8 + Math.sin(time * 1.7) * 0.1;
+            birdGroup.position.z = -2 + time * 0.08;
+            if (birdGroup.position.z > 50) birdGroup.position.z = -8;
+            
+            // 路面光点缓慢移动
+            roadGlow.position.z = (time * 1.5) % 15 - 5;
+            
+            // 更新相机控制
+            controls.update();
+            
+            // 渲染
+            renderer.render(scene, camera);
+            labelRenderer.render(scene, camera);
+        }
+        
+        animate();
+        
+        // 窗口自适应
+        window.addEventListener('resize', onWindowResize, false);
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        
+        // 控制台输出
+        console.log('3D场景“孤独的公路”已启动 | 设计：无尽延伸的荒原与孤寂');
+    </script>
+</body>
+</html>
